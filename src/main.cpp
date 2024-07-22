@@ -16,8 +16,8 @@
 #define PIN_IN2   19
 
 // Istanza della classe DebounceInterrupt
-DebounceInterrupt debounceInterruptUp(0, 80, PIN_ACIN_1, 50000);
-DebounceInterrupt debounceInterruptDown(1, 80, PIN_ACIN_2, 50000);
+DebounceInterrupt debounceInterruptUp(0, 80, PIN_ACIN_1, 100000); //time in microseconds
+DebounceInterrupt debounceInterruptDown(1, 80, PIN_ACIN_2, 100000);
 
 FireTimer TIMER_CurtainMove;
 FireTimer TIMER_Heartbeat;

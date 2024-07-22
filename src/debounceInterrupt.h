@@ -2,6 +2,7 @@
 #define DEBOUNCEINTERRUPT_H
 
 #include <Arduino.h>
+#define PUSLSE_COUNT_THRESHOLD 4
 
 class DebounceInterrupt {
 public:
@@ -18,7 +19,8 @@ private:
     uint16_t prescaler;
     uint8_t pin;
     uint32_t timeout;
-    volatile bool pinPressed;
+    volatile int pulseCount;
+    volatile bool pressed;
     hw_timer_t* timer;
     portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
