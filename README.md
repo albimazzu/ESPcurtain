@@ -1,2 +1,2 @@
 # ESPcurtain
-ESP32-C3 code for curtain management board
+ESP32-C3 code for shutter management board
