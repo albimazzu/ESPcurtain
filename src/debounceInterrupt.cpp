@@ -3,18 +3,24 @@
 // Inizializza il puntatore statico
 DebounceInterrupt* DebounceInterrupt::instances[4] = {nullptr, nullptr, nullptr, nullptr};
 
-DebounceInterrupt::DebounceInterrupt(uint8_t timerIndex, uint16_t prescaler, uint8_t pin, uint32_t timeout)
-  : timerIndex(timerIndex), prescaler(prescaler), pin(pin), timeout(timeout), pressed(false) {
+DebounceInterrupt::DebounceInterrupt(uint8_t timerIndex, uint8_t pin, uint32_t hzFreq)
+  : timerIndex(timerIndex), pin(pin), hzFreq(hzFreq), pressed(false) {
+
     // Inizializza il timer hardware
-    timer = timerBegin(timerIndex, prescaler, true);
+    timer = timerBegin(timerIndex, TIMER_PRESCALER, true);
     timerAttachInterrupt(timer, &DebounceInterrupt::onTimerStatic, true);
-    timerAlarmWrite(timer, timeout, false);
 
     // Imposta il pin come input
     pinMode(pin, INPUT_PULLUP);
 
     // Imposta l'interrupt sul pin
     attachInterruptArg(digitalPinToInterrupt(pin), DebounceInterrupt::handleInterruptStatic, this, FALLING);
+
+    // Calcolo filterTime
+    filterTime = 10e5/hzFreq;
+
+    // Calcolo valore timeout
+    timeout = 200000;//2*PULSE_COUNT_THRESHOLD*filterTime;
 
     // Registra l'istanza corrente nella mappa
     instances[timerIndex] = this;
@@ -38,19 +44,40 @@ void IRAM_ATTR DebounceInterrupt::onTimerStatic() {
 }
 
 void IRAM_ATTR DebounceInterrupt::handleInterrupt() {
-    portENTER_CRITICAL_ISR(&timerMux);  
-    if(pulseCount > PUSLSE_COUNT_THRESHOLD)  
+    portENTER_CRITICAL_ISR(&timerMux); 
+
+
+    // Verifica che sia trascorso filterTime dall'ultimo interrupt
+    if(timerRead(timer) > filterTime)
+        pulseCount++;
+
+    if (pulseCount > PULSE_COUNT_THRESHOLD)
         pressed = true;
-    pulseCount++;
-    timerWrite(timer, 0);
+
+
+    timerAlarmDisable(timer);
+    timerWrite(timer, 0);  
+    timerAlarmWrite(timer, timeout, false);
     timerAlarmEnable(timer);
     portEXIT_CRITICAL_ISR(&timerMux);
 }
 
+//Timer timeout handler
 void IRAM_ATTR DebounceInterrupt::onTimer() {
     portENTER_CRITICAL_ISR(&timerMux);
     pulseCount = 0;
     pressed = false;
     timerAlarmDisable(timer);
+    timerWrite(timer, 0);    
     portEXIT_CRITICAL_ISR(&timerMux);
 }
+
+
+uint32_t DebounceInterrupt::getFilterTime() {
+    return filterTime;
+}
+
+uint32_t DebounceInterrupt::getTimeout() {
+    return timeout;
+}
+

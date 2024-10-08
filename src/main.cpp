@@ -3,28 +3,21 @@
 #include <FS.h>
 #include <ArduinoJson.h> // JSON parsing
 
+#include "mapping.h"
 #include "debounceInterrupt.h"
 #include "FireTimer.h"
-
-#define PIN_DOWN_CMD  6
-#define PIN_UP_CMD  7
-#define PIN_ACIN_1  1
-#define PIN_ACIN_2  2
-#define PIN_ACIN_3  5
-#define PIN_ACIN_4  4
-#define PIN_SENSE   3
-#define PIN_485DIR   10
-#define PIN_USRBTN   8
-#define PIN_STATUSLED   9
-#define PIN_IN1   0
-#define PIN_IN2   19
+#include "secrets.h"
+#include "connection.h"
 
 #define DEFAULT_TIME_fullShutterMove 10000
 #define CALIBRATION_PRESSED_TIME 5000 //msec, when up/down buttons are pressed more than this time start calibration
 
+
+Connection wifiConnection;
+
 // Istanza della classe DebounceInterrupt
-DebounceInterrupt debounceInterruptUp(0, 80, PIN_ACIN_1, 100000); //time in microseconds
-DebounceInterrupt debounceInterruptDown(1, 80, PIN_ACIN_2, 100000);
+DebounceInterrupt debounceInterruptUp(0, PIN_ACIN_1, 60); //freq in Hz
+DebounceInterrupt debounceInterruptDown(1, PIN_ACIN_2, 60); //freq in Hz
 
 FireTimer TIMER_ShutterMove;
 FireTimer TIMER_RelaySpikeFilter;
@@ -32,6 +25,8 @@ FireTimer TIMER_Heartbeat;
 
 bool IN_CommandUp = false;
 bool IN_CommandDown = false;
+bool oldIN_CommandUp = false;
+bool oldIN_CommandDown = false;
 bool IN_ACIN_3 = false;
 bool IN_ACIN_4 = false;
 
@@ -76,6 +71,13 @@ void setup() {
 
   setupSPIFFS();
   loadConfig();  // Load config.json var values
+
+  //turn on wifi on startup
+  wifiConnection.initWiFiAP("ESP_shutter", "12345678", 60000);
+  
+  // delay(2000);
+  // Serial.println("filterTime:"+String(debounceInterruptDown.getFilterTime()));
+  // Serial.println("timeout:"+String(debounceInterruptDown.getTimeout()));
 }
 
 
@@ -85,6 +87,23 @@ void loop() {
   IO_sync();
   stateMachine();
 
+  if(!digitalRead(PIN_USRBTN) && wifiConnection.getWiFiStatus() == WIFI_OFF)
+  {
+    wifiConnection.initWiFiAP("ESP_shutter", "12345678", 60000);
+  }
+  wifiConnection.loop();
+
+  if(IN_CommandUp != oldIN_CommandUp)
+  {
+    oldIN_CommandUp = IN_CommandUp;
+    Serial.println("IN_CommandUp="+String(IN_CommandUp));
+  }
+
+  if(IN_CommandDown != oldIN_CommandDown)
+  {
+    oldIN_CommandDown = IN_CommandDown;
+    Serial.println("IN_CommandDown="+String(IN_CommandDown));
+  }
 }
 
 void stateMachine()
@@ -122,7 +141,7 @@ void stateMachine()
         Serial.println("Starting time calibration");
         STEP_shutterMove = 100;
       }
-      if(!IN_CommandDown && !IN_CommandUp)
+      if(IN_CommandDown == 0 && IN_CommandUp == 0)
         STEP_shutterMove = 2;
     break;
 
@@ -181,8 +200,8 @@ void IO_sync()
   digitalWrite(PIN_UP_CMD, OUT_ShutterUp);
   digitalWrite(PIN_DOWN_CMD, OUT_ShutterDown);
 
-  IN_CommandUp = !digitalRead(PIN_USRBTN);
-  //IN_CommandUp = debounceInterruptUp.isPressed();
+  //IN_CommandUp = !digitalRead(PIN_USRBTN);
+  IN_CommandUp = debounceInterruptUp.isPressed();
   IN_CommandDown = debounceInterruptDown.isPressed();
 }
 
